@@ -18,7 +18,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 APP_TITLE = "LocalForge"
-APP_VERSION = "0.1.0"
+APP_VERSION = "0.2.0"
 BG = "#0b0f14"
 PANEL = "#141a23"
 PANEL_2 = "#10151d"
@@ -902,7 +902,7 @@ class SettingsDialog(tk.Toplevel):
     def __init__(self, app: LocalForgeApp):
         super().__init__(app.root)
         self.app = app
-        self.title("LocalForge · server settings")
+        self.title("LocalForge · settings")
         self.configure(bg=PANEL)
         self.resizable(False, False)
         self.transient(app.root)
@@ -914,16 +914,17 @@ class SettingsDialog(tk.Toplevel):
     def _build(self) -> None:
         outer = tk.Frame(self, bg=PANEL, padx=22, pady=18)
         outer.pack(fill="both", expand=True)
-        outer.grid_columnconfigure(1, weight=1)
+        outer.grid_columnconfigure(0, weight=1)
+        outer.grid_rowconfigure(2, weight=1)
 
         tk.Label(
             outer,
-            text="Server settings",
+            text="Settings",
             bg=PANEL,
             fg=TEXT,
             font=(UI, 15, "bold"),
             anchor="w",
-        ).grid(row=0, column=0, columnspan=2, sticky="w")
+        ).grid(row=0, column=0, sticky="w")
         tk.Label(
             outer,
             text="Saved to the LocalForge config. Changes apply the next time the server starts.",
@@ -931,70 +932,171 @@ class SettingsDialog(tk.Toplevel):
             fg=MUTED,
             font=(UI, 9),
             anchor="w",
-            wraplength=450,
+            wraplength=580,
             justify="left",
-        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(4, 14))
+        ).grid(row=1, column=0, sticky="w", pady=(4, 0))
 
-        tk.Label(outer, text="Context length", bg=PANEL, fg=MUTED, font=(UI, 9)).grid(
-            row=2, column=0, sticky="w", pady=6
+        style = ttk.Style(self)
+        style.configure(
+            "Forge.TNotebook",
+            background=PANEL,
+            borderwidth=0,
+            lightcolor=PANEL,
+            darkcolor=PANEL,
+            bordercolor=PANEL,
         )
+        style.configure(
+            "Forge.TNotebook.Tab",
+            background=PANEL_2,
+            foreground=MUTED,
+            padding=(14, 7),
+            font=(UI, 9, "bold"),
+            borderwidth=0,
+            lightcolor=PANEL_2,
+            darkcolor=PANEL_2,
+            bordercolor=BORDER,
+        )
+        style.map(
+            "Forge.TNotebook.Tab",
+            background=[("selected", PANEL), ("active", BORDER)],
+            foreground=[("selected", AMBER), ("active", TEXT)],
+        )
+
+        notebook = ttk.Notebook(outer, style="Forge.TNotebook")
+        notebook.grid(row=2, column=0, sticky="nsew", pady=(12, 10))
+        generation = tk.Frame(notebook, bg=PANEL, padx=14, pady=10)
+        runtime = tk.Frame(notebook, bg=PANEL, padx=14, pady=10)
+        cache = tk.Frame(notebook, bg=PANEL, padx=14, pady=10)
+        for page in (generation, runtime, cache):
+            page.grid_columnconfigure(1, weight=1)
+        notebook.add(generation, text="Generation")
+        notebook.add(runtime, text="llama.cpp")
+        notebook.add(cache, text="KV cache")
+
+        self.max_tokens_var = tk.StringVar(value=str(self.app.cfg.get("max_new_tokens", 512)))
+        self.temperature_var = tk.StringVar(value=str(self.app.cfg.get("temperature", 0.7)))
+        self.top_p_var = tk.StringVar(value=str(self.app.cfg.get("top_p", 0.9)))
+        self.disable_thinking_var = tk.BooleanVar(
+            value=bool(self.app.cfg.get("disable_thinking", True))
+        )
+        self._row(
+            generation,
+            0,
+            "Max output tokens",
+            self.max_tokens_var,
+            "Default used when the client does not set max_tokens.",
+        )
+        self._row(
+            generation,
+            1,
+            "Temperature",
+            self.temperature_var,
+            "0.0 is deterministic; 2.0 is the most random.",
+        )
+        self._row(
+            generation,
+            2,
+            "Top-p",
+            self.top_p_var,
+            "Nucleus sampling cutoff; 0.9 is the default.",
+        )
+        self._check(
+            generation,
+            3,
+            "Disable model thinking",
+            self.disable_thinking_var,
+            "Stops Qwen reasoning tokens from consuming the output budget.",
+        )
+
         self.context_var = tk.StringVar(value=str(self.app.cfg.get("llama_ctx", 131072)))
-        context_entry = self._entry(outer, self.context_var)
-        context_entry.grid(row=2, column=1, sticky="ew", padx=(14, 0), pady=6)
-        tk.Label(outer, text="tokens (tested: 131,072)", bg=PANEL, fg=DIM, font=(UI, 8)).grid(
-            row=3, column=1, sticky="w", padx=(14, 0)
-        )
-
-        tk.Label(outer, text="GPU layers", bg=PANEL, fg=MUTED, font=(UI, 9)).grid(
-            row=4, column=0, sticky="w", pady=6
-        )
         self.layers_var = tk.StringVar(value=str(self.app.cfg.get("llama_ngl", 10)))
-        layers_entry = self._entry(outer, self.layers_var)
-        layers_entry.grid(row=4, column=1, sticky="ew", padx=(14, 0), pady=6)
-        tk.Label(outer, text="of 32 (10 is the tested 70/30 split)", bg=PANEL, fg=DIM, font=(UI, 8)).grid(
-            row=5, column=1, sticky="w", padx=(14, 0)
+        self.batch_var = tk.StringVar(value=str(self.app.cfg.get("llama_batch", 2048)))
+        self.ubatch_var = tk.StringVar(value=str(self.app.cfg.get("llama_ubatch", 1024)))
+        self.threads_var = tk.StringVar(value=str(self.app.cfg.get("llama_threads", 0)))
+        self.parallel_var = tk.StringVar(value=str(self.app.cfg.get("llama_parallel", 1)))
+        self.flash_var = tk.StringVar(value=str(self.app.cfg.get("llama_flash_attn", "on")))
+        self.warmup_var = tk.BooleanVar(value=bool(self.app.cfg.get("warmup", True)))
+        self._row(
+            runtime,
+            0,
+            "Context length",
+            self.context_var,
+            "Tested: 131,072 tokens. The KV cache is allocated at model load.",
+        )
+        self._row(
+            runtime,
+            1,
+            "GPU layers",
+            self.layers_var,
+            "10 of 32 is the tested 70/30 CPU/iGPU split.",
+        )
+        self._row(runtime, 2, "Batch size", self.batch_var, "Logical prompt batch; 2048 default.")
+        self._row(
+            runtime,
+            3,
+            "Ubatch size",
+            self.ubatch_var,
+            "Must be <= batch. 1024 keeps the 131k cache lighter.",
+        )
+        self._row(
+            runtime,
+            4,
+            "CPU threads",
+            self.threads_var,
+            "0 = automatic. On this i5, 8 is better than 12 for decode.",
+        )
+        self._row(
+            runtime,
+            5,
+            "Parallel slots",
+            self.parallel_var,
+            "Keep at 1 on 16 GB; each extra slot adds overhead.",
+        )
+        self._combo_row(
+            runtime,
+            6,
+            "Flash attention",
+            self.flash_var,
+            ["on", "off", "auto"],
+            "on is recommended for Vulkan with quantized KV.",
+        )
+        self._check(
+            runtime,
+            7,
+            "Warm up after load",
+            self.warmup_var,
+            "Absorbs Qwen's slow first request penalty.",
         )
 
-        tk.Label(outer, text="K cache", bg=PANEL, fg=MUTED, font=(UI, 9)).grid(
-            row=6, column=0, sticky="w", pady=6
-        )
-        k_value = str(self.app.cfg.get("llama_cache_k", "q8_0"))
-        tk.Label(outer, text=f"{k_value} (keep Q8)", bg=PANEL_2, fg=TEXT, font=(MONO, 9), padx=8, pady=5).grid(
-            row=6, column=1, sticky="w", padx=(14, 0), pady=6
-        )
-
-        tk.Label(outer, text="V cache", bg=PANEL, fg=MUTED, font=(UI, 9)).grid(
-            row=7, column=0, sticky="w", pady=6
-        )
+        self.k_var = tk.StringVar(value=str(self.app.cfg.get("llama_cache_k", "q8_0")))
         self.v_var = tk.StringVar(value=str(self.app.cfg.get("llama_cache_v", "q4_0")))
-        v_combo = ttk.Combobox(
-            outer,
-            textvariable=self.v_var,
-            values=["q4_0", "q8_0"],
-            state="readonly",
-            style="Forge.TCombobox",
-            font=(MONO, 9),
-            width=12,
+        self._combo_row(
+            cache,
+            0,
+            "K cache",
+            self.k_var,
+            ["q8_0", "f16", "q4_0"],
+            "Q8_0 recommended. Q4 K reduces long-context and tool accuracy.",
         )
-        v_combo.grid(row=7, column=1, sticky="w", padx=(14, 0), pady=6)
+        self._combo_row(
+            cache,
+            1,
+            "V cache",
+            self.v_var,
+            ["q4_0", "q8_0", "f16"],
+            "Q4_0 saves memory; Q8_0 is higher fidelity.",
+        )
         tk.Label(
-            outer,
-            text="q4_0 saves memory; q8_0 has higher long-context fidelity",
-            bg=PANEL,
-            fg=DIM,
-            font=(UI, 8),
-        ).grid(row=8, column=1, sticky="w", padx=(14, 0))
-
-        tk.Label(
-            outer,
-            text="The 131k KV cache is allocated when the model loads. A completely cold 131k prompt "
-            "can take hours on this laptop; later turns reuse the cached prefix.",
+            cache,
+            text="At 131k tokens the KV cache is roughly 2.1 GB with Q8/Q8, 1.6 GB with "
+            "Q8/Q4, and 4.0 GB at f16. A completely cold 131k prompt can take hours; "
+            "later turns reuse the cached prefix.",
             bg=PANEL,
             fg=AMBER,
             font=(UI, 8),
-            wraplength=450,
+            wraplength=560,
             justify="left",
-        ).grid(row=9, column=0, columnspan=2, sticky="w", pady=(14, 8))
+        ).grid(row=6, column=0, columnspan=2, sticky="w", pady=(14, 0))
 
         running = self.app.controller is not None and self.app.controller.is_active()
         if running:
@@ -1004,20 +1106,111 @@ class SettingsDialog(tk.Toplevel):
                 bg=PANEL,
                 fg=BLUE,
                 font=(UI, 9),
-                wraplength=450,
+                wraplength=580,
                 justify="left",
-            ).grid(row=10, column=0, columnspan=2, sticky="w", pady=(0, 8))
+            ).grid(row=3, column=0, sticky="w", pady=(0, 4))
 
         buttons = tk.Frame(outer, bg=PANEL)
-        buttons.grid(row=11, column=0, columnspan=2, sticky="e", pady=(10, 0))
+        buttons.grid(row=4, column=0, sticky="e", pady=(10, 0))
         self.app._button(buttons, "Cancel", self.destroy, ghost=True, width=9).pack(side="left")
         self.app._button(buttons, "Save", self.save, primary=True, width=9).pack(side="left", padx=(8, 0))
 
         self.update_idletasks()
-        width, height = 540, outer.winfo_reqheight() + 20
-        x = self.app.root.winfo_rootx() + (self.app.root.winfo_width() - width) // 2
-        y = self.app.root.winfo_rooty() + (self.app.root.winfo_height() - height) // 2
+        width = 640
+        height = max(570, outer.winfo_reqheight() + 20)
+        x = (self.winfo_screenwidth() - width) // 2
+        y = (self.winfo_screenheight() - height) // 2
         self.geometry(f"{width}x{height}+{max(0, x)}+{max(0, y)}")
+
+    def _row(
+        self,
+        page: tk.Misc,
+        index: int,
+        label: str,
+        variable: tk.StringVar,
+        hint: str,
+    ) -> None:
+        row = index * 2
+        tk.Label(page, text=label, bg=PANEL, fg=MUTED, font=(UI, 9)).grid(
+            row=row, column=0, sticky="w", pady=(5, 0)
+        )
+        entry = self._entry(page, variable)
+        entry.grid(row=row, column=1, sticky="w", padx=(18, 0), pady=(5, 0))
+        tk.Label(
+            page,
+            text=hint,
+            bg=PANEL,
+            fg=DIM,
+            font=(UI, 8),
+            wraplength=410,
+            justify="left",
+        ).grid(row=row + 1, column=1, sticky="w", padx=(18, 0))
+
+    def _combo_row(
+        self,
+        page: tk.Misc,
+        index: int,
+        label: str,
+        variable: tk.StringVar,
+        values: list[str],
+        hint: str,
+    ) -> None:
+        row = index * 2
+        tk.Label(page, text=label, bg=PANEL, fg=MUTED, font=(UI, 9)).grid(
+            row=row, column=0, sticky="w", pady=(5, 0)
+        )
+        combo = ttk.Combobox(
+            page,
+            textvariable=variable,
+            values=values,
+            state="readonly",
+            style="Forge.TCombobox",
+            font=(MONO, 9),
+            width=14,
+        )
+        combo.grid(row=row, column=1, sticky="w", padx=(18, 0), pady=(5, 0))
+        tk.Label(
+            page,
+            text=hint,
+            bg=PANEL,
+            fg=DIM,
+            font=(UI, 8),
+            wraplength=410,
+            justify="left",
+        ).grid(row=row + 1, column=1, sticky="w", padx=(18, 0))
+
+    def _check(
+        self,
+        page: tk.Misc,
+        index: int,
+        text: str,
+        variable: tk.BooleanVar,
+        hint: str,
+    ) -> None:
+        row = index * 2
+        tk.Checkbutton(
+            page,
+            text=text,
+            variable=variable,
+            bg=PANEL,
+            fg=TEXT,
+            selectcolor=AMBER,
+            activebackground=PANEL,
+            activeforeground=TEXT,
+            highlightthickness=0,
+            bd=0,
+            anchor="w",
+            font=(UI, 9),
+        ).grid(row=row, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        tk.Label(
+            page,
+            text=hint,
+            bg=PANEL,
+            fg=DIM,
+            font=(UI, 8),
+            wraplength=560,
+            justify="left",
+        ).grid(row=row + 1, column=1, sticky="w", padx=(18, 0))
 
     @staticmethod
     def _entry(parent: tk.Misc, variable: tk.StringVar) -> tk.Entry:
@@ -1032,21 +1225,60 @@ class SettingsDialog(tk.Toplevel):
             highlightbackground=BORDER,
             highlightcolor=AMBER,
             font=(MONO, 10),
-            width=14,
+            width=16,
         )
 
     def save(self) -> None:
+        def as_int(variable: tk.StringVar, label: str, low: int, high: int) -> int:
+            try:
+                value = int(variable.get().strip())
+            except ValueError as exc:
+                raise ValueError(f"{label} must be a whole number.") from exc
+            if not low <= value <= high:
+                raise ValueError(f"{label} must be between {low:,} and {high:,}.")
+            return value
+
+        def as_float(variable: tk.StringVar, label: str, low: float, high: float) -> float:
+            try:
+                value = float(variable.get().strip())
+            except ValueError as exc:
+                raise ValueError(f"{label} must be a number.") from exc
+            if not low <= value <= high:
+                raise ValueError(f"{label} must be between {low:g} and {high:g}.")
+            return value
+
         try:
-            context = int(self.context_var.get().strip())
-            layers = int(self.layers_var.get().strip())
-        except ValueError:
-            messagebox.showerror(APP_TITLE, "Context and GPU layers must be whole numbers.", parent=self)
+            max_tokens = as_int(self.max_tokens_var, "Max output tokens", 1, 32768)
+            temperature = as_float(self.temperature_var, "Temperature", 0.0, 2.0)
+            top_p = as_float(self.top_p_var, "Top-p", 0.01, 1.0)
+            context = as_int(self.context_var, "Context length", 512, 262144)
+            layers = as_int(self.layers_var, "GPU layers", 0, 32)
+            batch = as_int(self.batch_var, "Batch size", 1, 8192)
+            ubatch = as_int(self.ubatch_var, "Ubatch size", 1, 4096)
+            threads = as_int(self.threads_var, "CPU threads", 0, 64)
+            parallel = as_int(self.parallel_var, "Parallel slots", 1, 4)
+            if ubatch > batch:
+                raise ValueError("Ubatch size cannot be larger than the batch size.")
+        except ValueError as exc:
+            messagebox.showerror(APP_TITLE, str(exc), parent=self)
             return
-        if not 512 <= context <= 262144:
-            messagebox.showerror(APP_TITLE, "Context must be between 512 and 262,144 tokens.", parent=self)
+
+        flash = self.flash_var.get()
+        cache_k = self.k_var.get()
+        cache_v = self.v_var.get()
+        if flash not in {"on", "off", "auto"}:
+            messagebox.showerror(APP_TITLE, "Flash attention must be on, off, or auto.", parent=self)
             return
-        if not 0 <= layers <= 32:
-            messagebox.showerror(APP_TITLE, "GPU layers must be between 0 and 32.", parent=self)
+        if cache_k not in {"q8_0", "f16", "q4_0"} or cache_v not in {"q4_0", "q8_0", "f16"}:
+            messagebox.showerror(APP_TITLE, "Choose a valid KV cache type.", parent=self)
+            return
+        if flash == "off" and (cache_k != "f16" or cache_v != "f16"):
+            messagebox.showerror(
+                APP_TITLE,
+                "Quantized KV cache requires flash attention. Set flash attention to on/auto, "
+                "or set both caches to f16.",
+                parent=self,
+            )
             return
 
         cfg = dict(self.app.cfg)
@@ -1054,9 +1286,24 @@ class SettingsDialog(tk.Toplevel):
             cfg = json.loads(config_path().read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             pass
-        cfg["llama_ctx"] = context
-        cfg["llama_ngl"] = layers
-        cfg["llama_cache_v"] = self.v_var.get()
+        cfg.update(
+            {
+                "max_new_tokens": max_tokens,
+                "temperature": temperature,
+                "top_p": top_p,
+                "disable_thinking": bool(self.disable_thinking_var.get()),
+                "llama_ctx": context,
+                "llama_ngl": layers,
+                "llama_batch": batch,
+                "llama_ubatch": ubatch,
+                "llama_threads": threads,
+                "llama_parallel": parallel,
+                "llama_flash_attn": flash,
+                "llama_cache_k": cache_k,
+                "llama_cache_v": cache_v,
+                "warmup": bool(self.warmup_var.get()),
+            }
+        )
         try:
             config_path().parent.mkdir(parents=True, exist_ok=True)
             config_path().write_text(json.dumps(cfg, indent=2), encoding="utf-8")
@@ -1067,7 +1314,8 @@ class SettingsDialog(tk.Toplevel):
         self.app.cfg = cfg
         self.app._update_metrics()
         self.app.append_log(
-            f"Settings saved: ctx {context:,} · {layers}/32 GPU layers · V cache {self.v_var.get()}"
+            f"Settings saved: ctx {context:,} · {layers}/32 GPU · ubatch {ubatch} · "
+            f"temp {temperature:g} · KV {cache_k}/{cache_v}"
         )
         running = self.app.controller is not None and self.app.controller.is_active()
         messagebox.showinfo(

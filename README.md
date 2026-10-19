@@ -4,6 +4,8 @@ LocalForge is a Windows desktop app, CLI, and local OpenAI-compatible API for ru
 uncensored/abliterated multimodal models. It uses **OpenVINO GenAI** for Gemma 4 E2B and
 **llama.cpp** for abliterated GGUFs.
 
+[Latest release](https://github.com/solletravinder/localforge/releases/latest)
+
 ## Desktop app
 
 Double-click **`LocalForge.exe`** (or the LocalForge desktop shortcut). No terminal is needed.
@@ -11,9 +13,17 @@ Double-click **`LocalForge.exe`** (or the LocalForge desktop shortcut). No termi
 ![LocalForge desktop app](assets/screenshot.png)
 
 The window can start and stop the local server, choose the model, show live RAM and context
-settings, open Jan, open the API docs, open the log folder, and edit context/GPU-layer/KV-cache
-settings without a terminal. Closing the window unloads the model and stops the server, so it
-stays on demand.
+settings, open Jan, open the API docs, and open the log folder. Closing the window unloads the
+model and stops the server, so it stays on demand.
+
+**Settings** has three tabs:
+
+- **Generation:** max output tokens, temperature, top-p, and thinking mode.
+- **llama.cpp:** context length, GPU layers, batch, ubatch, CPU threads, parallel slots, flash
+  attention, and warmup.
+- **KV cache:** K and V cache types, with the 131k memory trade-off shown inline.
+
+Settings are validated, saved to the LocalForge config, and take effect after Stop and Start.
 
 Keep `LocalForge.exe` inside the `local-forge` folder: it uses the existing `.venv` and model
 directories. In Jan, use base URL `http://127.0.0.1:8090/v1`, model

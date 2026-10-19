@@ -11,6 +11,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
+from . import __version__
 from .catalog import find_spec
 from .config import AppConfig, load_config
 from .engines import ChatOptions, EngineError, EngineManager, EngineUnavailable
@@ -72,7 +73,7 @@ def create_app(
 
     app = FastAPI(
         title="LocalForge",
-        version="0.1.0",
+        version=__version__,
         description="Local uncensored multimodal inference with OpenVINO GPU and llama.cpp.",
         lifespan=lifespan,
     )
@@ -90,7 +91,7 @@ def create_app(
     def root() -> dict:
         return {
             "name": "LocalForge",
-            "version": "0.1.0",
+            "version": __version__,
             "models_dir": str(config.models_path),
             "endpoints": [
                 "/v1/models",
@@ -110,7 +111,7 @@ def create_app(
         return {
             "status": "ok",
             "app": "localforge",
-            "version": "0.1.0",
+            "version": __version__,
             "models_dir": str(config.models_path),
             "engines": engine_manager.status(),
         }
