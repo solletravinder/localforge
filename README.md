@@ -6,6 +6,17 @@ uncensored/abliterated multimodal models. It uses **OpenVINO GenAI** for Gemma 4
 
 [Latest release](https://github.com/solletravinder/localforge/releases/latest)
 
+## Portable installer
+
+Download **`LocalForge-Setup-0.4.0.exe`** from the latest release and run it. It installs per user,
+needs no Python installation or terminal, and bundles the Python runtime, dependencies, and
+`llama-server.exe`.
+
+The installer is a per-user installation (no admin prompt) and is about 515 MB compressed; the
+installed runtime is about 1.1 GB. It includes an abliterated **Qwen3 0.6B sanity model** at 8K
+context. It is selected automatically on first launch so you can verify the installation
+immediately. Download Qwen3.5 4B from the Models window for the full 131k profile.
+
 ## Desktop app
 
 Double-click **`LocalForge.exe`** (or the LocalForge desktop shortcut). No terminal is needed.
@@ -39,22 +50,30 @@ Keep `LocalForge.exe` inside the `local-forge` folder: it uses the existing `.ve
 directories. In Jan, use base URL `http://127.0.0.1:8090/v1`, model
 `qwen3.5-4b-abliterated`, and context `131000`.
 
-### Build the desktop EXE
+### Build the desktop EXE or portable installer
 
-The repository ships the source, not the generated executable. After setup:
+The repository ships the source, not the generated binaries. After setup:
 
 ```bat
 build-exe.bat
 ```
 
 It installs PyInstaller into `.venv`, builds a windowed one-file `dist\LocalForge.exe`, and copies
-it to the project root. The executable is a thin launcher for this environment, not a standalone
-copy of the OpenVINO/llama.cpp stack.
+it to the project root. For the self-contained per-user installer:
+
+```bat
+build-installer.bat
+```
+
+This bundles Python, the dependencies, `llama-server.exe`, and the Qwen3 0.6B sanity model, then
+writes `dist\LocalForge-Setup-0.4.0.exe`. Model weights for the larger models are downloaded from
+the Models window.
 
 Verified on an i5-12450H, 16 GB RAM, Intel UHD Graphics laptop:
 
 | Model | Engine | Speed | Notes |
 |---|---|---:|---|
+| Qwen3 0.6B Abliterated Q4_K_M | llama.cpp | sanity check | Bundled with portable installer, 8K context |
 | Gemma 4 E2B Uncensored INT4 | OpenVINO CPU | ~18.7 tok/s decode | Text + vision, stable on 16 GB |
 | Qwen3.5 4B Abliterated Q4_K_M | llama.cpp 70/30 | ~57 tok/s prefill, ~7 tok/s decode | 131k context, text + vision |
 | LFM2.5 2.6B Abliterated Q4_K_M | llama.cpp | not yet validated | Very new build |

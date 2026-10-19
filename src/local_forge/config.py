@@ -105,6 +105,9 @@ def load_config() -> AppConfig:
             raise RuntimeError(f"Cannot read config {path}: {exc}") from exc
         allowed = {f.name for f in fields(AppConfig)}
         cfg = AppConfig(**{k: v for k, v in data.items() if k in allowed})
+    models_override = os.environ.get("LOCALFORGE_MODELS_DIR")
+    if models_override:
+        cfg.models_dir = str(Path(models_override).expanduser())
     cfg.ensure_dirs()
     return cfg
 

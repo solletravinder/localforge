@@ -82,6 +82,7 @@ class ModelManager:
             "model_file": str(gguf) if gguf else None,
             "mmproj_file": str(mmproj) if mmproj else None,
             "quant": spec.quant,
+            "context_length": spec.context_length,
             "local": spec.is_local,
         }
 

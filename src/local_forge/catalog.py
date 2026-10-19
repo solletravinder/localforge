@@ -19,6 +19,7 @@ class ModelSpec:
     notes: str = ""
     allow_patterns: tuple[str, ...] = ()
     quant: str = "Q4_K_M"
+    context_length: int | None = None
     local_path: str | None = None
 
     @property
@@ -58,6 +59,24 @@ CATALOG: tuple[ModelSpec, ...] = (
             "downloaded automatically. Requires a recent llama.cpp build."
         ),
         allow_patterns=("*Q4_K_M.gguf", "*q4_k_m.gguf", "*mmproj-Q8_0.gguf", "*MMPROJ-Q8_0.gguf"),
+    ),
+    ModelSpec(
+        id="qwen3-0.6b-abliterated",
+        name="Qwen3 0.6B Abliterated (GGUF Q4_K_M, sanity check)",
+        engine="llama.cpp",
+        repo="DevQuasar/huihui-ai.Qwen3-0.6B-abliterated-GGUF",
+        dir_name="qwen3-0.6b-abliterated-gguf",
+        format="gguf",
+        size_gb=0.4,
+        modalities=("text",),
+        license="Apache-2.0",
+        notes=(
+            "Tiny abliterated sanity-check model. Bundled with the portable installer so the "
+            "first launch can verify llama.cpp before downloading Qwen3.5 4B. Limited to an "
+            "8,192-token context because it is a full-attention 0.6B model."
+        ),
+        allow_patterns=("*Q4_K_M.gguf", "*q4_k_m.gguf"),
+        context_length=8192,
     ),
     ModelSpec(
         id="lfm2.5-2.6b-abliterated",
@@ -122,6 +141,9 @@ def local_specs(config: AppConfig) -> list[ModelSpec]:
                     modalities=tuple(item.get("modalities") or ("text",)),
                     license=str(item.get("license") or "unknown"),
                     notes=str(item.get("notes") or "Locally registered model"),
+                    context_length=(
+                        int(item["context_length"]) if item.get("context_length") else None
+                    ),
                     local_path=str(item["path"]),
                 )
             )

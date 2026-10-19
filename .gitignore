@@ -17,3 +17,5 @@ dist/
 config.local.json
 .env
 .DS_Store
+portable/
+install-test/

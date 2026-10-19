@@ -1,6 +1,10 @@
 # LocalForge — desktop app and commands
 
-**No-terminal path:** double-click `LocalForge.exe` or the LocalForge shortcut on the desktop.
+**Installed path:** run `LocalForge-Setup-0.4.0.exe` from the latest release. It bundles Python,
+dependencies, `llama-server.exe`, and the Qwen3 0.6B sanity model. No terminal or Python installation
+is needed.
+
+**Project path:** double-click `LocalForge.exe` or the LocalForge shortcut on the desktop.
 Use the window to start/stop the server, open Jan, open the API docs, and watch logs and RAM.
 **Models** lists, downloads, picks, registers, and removes models; downloads show progress and can
 be cancelled. **Settings** edits generation defaults (max tokens, temperature, top-p, thinking),

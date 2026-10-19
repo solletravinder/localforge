@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.0 — 2026-10-19
+
+- Added a per-user Windows portable installer that bundles the Python runtime, dependencies,
+  OpenVINO/llama.cpp stack, `llama-server.exe`, and an abliterated Qwen3 0.6B sanity model.
+- Added the Qwen3 0.6B sanity model with an 8K context override so the first run can verify
+  inference immediately without downloading Qwen3.5 4B.
+- Added portable mode: config, logs, and models live beside the application; model paths remain
+  relocatable.
+- Added reproducible `build-portable.py`, `build-installer.bat`, and Inno Setup packaging.
+
 ## 0.3.0 — 2026-10-19
 
 - Added a desktop Models manager with installed/missing status, download progress, cancellation,

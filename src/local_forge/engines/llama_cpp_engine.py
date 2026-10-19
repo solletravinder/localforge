@@ -95,6 +95,7 @@ class LlamaCppEngine(ChatEngine):
         log_path = log_dir / f"llama-{self.spec.id.replace('/', '-')}.log"
         log_handle = open(log_path, "ab", buffering=0)
 
+        context_size = int(self.spec.context_length or self.config.llama_ctx)
         args = [
             server,
             "-m",
@@ -104,7 +105,7 @@ class LlamaCppEngine(ChatEngine):
             "--port",
             str(port),
             "-c",
-            str(int(self.config.llama_ctx)),
+            str(context_size),
             "-b",
             str(int(self.config.llama_batch)),
             "-ub",
@@ -131,7 +132,7 @@ class LlamaCppEngine(ChatEngine):
 
         print(
             f"Starting llama.cpp for {self.spec.id} on port {port} "
-            f"(ngl={self.config.llama_ngl}, ctx={self.config.llama_ctx})...",
+            f"(ngl={self.config.llama_ngl}, ctx={context_size})...",
             file=sys.stderr,
             flush=True,
         )
@@ -382,7 +383,7 @@ class LlamaCppEngine(ChatEngine):
             "mmproj_file": str(self._mmproj) if self._mmproj else None,
             "port": self._port,
             "ngl": self.config.llama_ngl,
-            "ctx": self.config.llama_ctx,
+            "ctx": int(self.spec.context_length or self.config.llama_ctx),
             "ubatch": self.config.llama_ubatch,
             "parallel": self.config.llama_parallel,
             "kv_cache": f"k={self.config.llama_cache_k},v={self.config.llama_cache_v}",

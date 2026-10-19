@@ -18,7 +18,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 APP_TITLE = "LocalForge"
-APP_VERSION = "0.3.0"
+APP_VERSION = "0.4.0"
 BG = "#0b0f14"
 PANEL = "#141a23"
 PANEL_2 = "#10151d"
@@ -63,11 +63,27 @@ FALLBACK_MODELS = [
         "path": "",
         "notes": "",
     },
+    {
+        "id": "qwen3-0.6b-abliterated",
+        "name": "Qwen3 0.6B Abliterated (GGUF Q4_K_M, sanity check)",
+        "engine": "llama.cpp",
+        "format": "gguf",
+        "installed": False,
+        "size_gb": 0.4,
+        "expected_size_gb": 0.4,
+        "modalities": ["text"],
+        "license": "Apache-2.0",
+        "local": False,
+        "path": "",
+        "notes": "",
+        "context_length": 8192,
+    },
 ]
 KNOWN_SHORT_NAMES = {
     "qwen3.5-4b-abliterated": "Qwen3.5-4B",
     "gemma4-e2b-uncensored-ov": "Gemma 4 E2B",
     "lfm2.5-2.6b-abliterated": "LFM2.5 2.6B",
+    "qwen3-0.6b-abliterated": "Qwen3 0.6B Sanity",
 }
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
@@ -105,7 +121,7 @@ def format_model_size(record: dict) -> str:
 
 
 def models_json(app_dir: Path) -> list[dict]:
-    python = app_dir / ".venv" / "Scripts" / "python.exe"
+    python = runtime_python(app_dir)
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
     env["PYTHONIOENCODING"] = "utf-8"
@@ -147,8 +163,54 @@ def find_app_dir() -> Path | None:
             if candidate in seen:
                 continue
             seen.add(candidate)
-            if (candidate / ".venv" / "Scripts" / "python.exe").is_file():
+            has_venv = (candidate / ".venv" / "Scripts" / "python.exe").is_file()
+            has_portable = (
+                (candidate / "portable.flag").is_file()
+                and (candidate / "runtime" / "python" / "python.exe").is_file()
+            )
+            if has_venv or has_portable:
                 return candidate
+    return None
+
+
+def runtime_python(app_dir: Path) -> Path:
+    portable = app_dir / "runtime" / "python" / "python.exe"
+    if portable.is_file():
+        return portable
+    return app_dir / ".venv" / "Scripts" / "python.exe"
+
+
+def configure_portable_environment() -> Path | None:
+    starts = [Path(sys.executable).resolve().parent]
+    if not getattr(sys, "frozen", False):
+        starts.append(Path(__file__).resolve().parent)
+    seen: set[Path] = set()
+    for start in starts:
+        for candidate in (start, start.parent, start.parent.parent):
+            candidate = candidate.resolve()
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            if not (
+                (candidate / "portable.flag").is_file()
+                and (candidate / "runtime" / "python" / "python.exe").is_file()
+            ):
+                continue
+            data = candidate / "data"
+            models = candidate / "models"
+            app_dir = candidate / "runtime" / "app"
+            data.mkdir(parents=True, exist_ok=True)
+            models.mkdir(parents=True, exist_ok=True)
+            os.environ["LOCALFORGE_HOME"] = str(data)
+            os.environ["LOCALFORGE_MODELS_DIR"] = str(models)
+            existing_pythonpath = os.environ.get("PYTHONPATH", "")
+            os.environ["PYTHONPATH"] = (
+                str(app_dir)
+                if not existing_pythonpath
+                else str(app_dir) + os.pathsep + existing_pythonpath
+            )
+            os.environ["PYTHONNOUSERSITE"] = "1"
+            return candidate
     return None
 
 
@@ -165,15 +227,22 @@ def find_jan() -> Path | None:
 
 
 def config_path() -> Path:
+    home = os.environ.get("LOCALFORGE_HOME")
+    if home:
+        return Path(home).expanduser() / "config.json"
     appdata = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
     return appdata / "LocalForge" / "config.json"
 
 
 def load_config() -> dict:
     try:
-        return json.loads(config_path().read_text(encoding="utf-8"))
+        data = json.loads(config_path().read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        return {}
+        data = {}
+    models_dir = os.environ.get("LOCALFORGE_MODELS_DIR")
+    if models_dir:
+        data["models_dir"] = models_dir
+    return data
 
 
 def free_ram_gb() -> float | None:
@@ -250,7 +319,7 @@ class ServerController:
                 self._put("log", f"Cannot start: 127.0.0.1:{self.port} is occupied.")
                 return
 
-            python = self.app_dir / ".venv" / "Scripts" / "python.exe"
+            python = runtime_python(self.app_dir)
             command = [
                 str(python),
                 "-u",
@@ -372,7 +441,7 @@ class LocalForgeApp:
         self.controller = ServerController(self.app_dir, self.port) if self.app_dir else None
         self.state = "error" if self.app_dir is None else "stopped"
         self.detail = (
-            "The LocalForge environment was not found. Keep the EXE inside the local-forge folder."
+            "The LocalForge runtime was not found. Keep the EXE inside the local-forge or portable folder."
             if self.app_dir is None
             else "Server is not running. Start it to use Jan or the local API."
         )
@@ -876,7 +945,7 @@ class LocalForgeApp:
         self.metric_vars["model"].set(model_short_name(record) if record else selected)
         engine = str(record.get("engine") or "llama.cpp")
         if engine == "llama.cpp":
-            ctx = int(self.cfg.get("llama_ctx", 131072) or 131072)
+            ctx = int(record.get("context_length") or self.cfg.get("llama_ctx", 131072) or 131072)
             ngl = self.cfg.get("llama_ngl", 10)
             cache_k = str(self.cfg.get("llama_cache_k", "q8_0")).split("_")[0].upper()
             cache_v = str(self.cfg.get("llama_cache_v", "q4_0")).split("_")[0].upper()
@@ -935,8 +1004,9 @@ class LocalForgeApp:
             (label for label, model_id in self.model_display_by_id.items() if model_id == current),
             None,
         )
-        if selected_display is None:
-            installed = [item for item in self.model_records if item.get("installed")]
+        current_record = self.model_by_id.get(current, {})
+        installed = [item for item in self.model_records if item.get("installed")]
+        if selected_display is None or (installed and not current_record.get("installed")):
             preferred = next(
                 (item for item in installed if item.get("id") == "qwen3.5-4b-abliterated"),
                 installed[0] if installed else self.model_records[0],
@@ -1063,8 +1133,12 @@ class LocalForgeApp:
             messagebox.showerror(APP_TITLE, f"Could not open Jan:\n{exc}")
 
     def open_logs(self) -> None:
-        appdata = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
-        log_dir = appdata / "LocalForge" / "logs"
+        home = os.environ.get("LOCALFORGE_HOME")
+        if home:
+            log_dir = Path(home).expanduser() / "logs"
+        else:
+            appdata = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
+            log_dir = appdata / "LocalForge" / "logs"
         try:
             log_dir.mkdir(parents=True, exist_ok=True)
             os.startfile(str(log_dir))
@@ -1954,9 +2028,11 @@ class ModelsWindow(tk.Toplevel):
             size = format_model_size(record)
             state = "local registration" if local else "catalog"
             self.detail_title.configure(text=str(record.get("name") or record.get("id")))
+            ctx = record.get("context_length")
+            context_note = f" · {int(ctx):,} ctx" if ctx else ""
             self.detail_meta.configure(
                 text=f"{engine_label(str(record.get('engine') or ''))} · "
-                f"{record.get('license') or 'unknown license'} · {size} · {state}"
+                f"{record.get('license') or 'unknown license'} · {size} · {state}{context_note}"
             )
             notes = str(record.get("notes") or "")
             if not installed and record.get("repo"):
@@ -2053,7 +2129,7 @@ class ModelsWindow(tk.Toplevel):
         ):
             return
         command = [
-            str(self.app.app_dir / ".venv" / "Scripts" / "python.exe"),
+            str(runtime_python(self.app.app_dir)),
             "-u",
             "-m",
             "local_forge",
@@ -2089,7 +2165,7 @@ class ModelsWindow(tk.Toplevel):
         if not messagebox.askyesno("Remove model", message, parent=self):
             return
         command = [
-            str(self.app.app_dir / ".venv" / "Scripts" / "python.exe"),
+            str(runtime_python(self.app.app_dir)),
             "-u",
             "-m",
             "local_forge",
@@ -2112,7 +2188,7 @@ class ModelsWindow(tk.Toplevel):
         modalities: str,
     ) -> None:
         command = [
-            str(self.app.app_dir / ".venv" / "Scripts" / "python.exe"),
+            str(runtime_python(self.app.app_dir)),
             "-u",
             "-m",
             "local_forge",
@@ -2552,6 +2628,7 @@ class AddLocalDialog(tk.Toplevel):
 
 
 def main() -> None:
+    configure_portable_environment()
     try:
         ctypes.windll.shcore.SetProcessDpiAwareness(1)
     except Exception:
