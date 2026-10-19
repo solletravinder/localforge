@@ -1,8 +1,8 @@
 # LocalForge
 
 LocalForge is a Windows desktop app, CLI, and local OpenAI-compatible API for running
-uncensored/abliterated multimodal models. It uses **OpenVINO GenAI** for Gemma 4 E2B and
-**llama.cpp** for abliterated GGUFs.
+uncensored/abliterated multimodal models. It uses **OpenVINO GenAI** for Gemma 4 E2B,
+**llama.cpp** for abliterated GGUFs, and a validated **LiteRT-LM** adapter.
 
 [Latest release](https://github.com/solletravinder/localforge/releases/latest)
 
@@ -12,14 +12,19 @@ Download the latest **`LocalForge-Setup-*.exe`** from the releases page and run 
 needs no Python installation or terminal, and bundles the Python runtime, dependencies, and
 `llama-server.exe`.
 
-The installer is a per-user installation (no admin prompt) and is about 515 MB compressed; the
+The installer is a per-user installation (no admin prompt) and is about 520 MB compressed; the
 installed runtime is about 1.1 GB. It includes an abliterated **Qwen3 0.6B sanity model** at 8K
 context. It is selected automatically on first launch so you can verify the installation
 immediately. Download Qwen3.5 4B from the Models window for the full 131k profile.
 
+The installer does not bundle the SD1.5 image-generation checkpoint. Image generation remains
+available from a source setup or by converting a checkpoint with `lforge convert-image`.
+
 ## Desktop app
 
-Double-click **`LocalForge.exe`** (or the LocalForge desktop shortcut). No terminal is needed.
+Double-click the installed **LocalForge** shortcut. The installer copy is self-contained and
+needs no project folder, `.venv`, or Python installation. A smaller project-root
+`LocalForge.exe` remains available for development from this repository.
 
 ![LocalForge desktop app](assets/screenshot.png)
 
@@ -40,7 +45,7 @@ suggestions fill the llama.cpp fields for review; per-model context overrides st
 
 - **Generation:** max output tokens, temperature, top-p, and thinking mode.
 - **llama.cpp:** context length, GPU layers, batch, ubatch, CPU threads, parallel slots, flash
-  attention, and warmup.
+  attention, and warmup. **Auto-tune from selected GGUF** fills these from the model metadata.
 - **KV cache:** K and V cache types, with the 131k memory trade-off shown inline.
 
 Settings are validated, saved to the LocalForge config, and take effect after Stop and Start.
@@ -57,9 +62,9 @@ Settings are validated, saved to the LocalForge config, and take effect after St
   provider, with resume support. Hugging Face `/blob/` links are converted to `/resolve/`.
 - Removes downloaded models or unregisters local models without deleting their files.
 
-Keep `LocalForge.exe` inside the `local-forge` folder: it uses the existing `.venv` and model
-directories. In Jan, use base URL `http://127.0.0.1:8090/v1`, model
-`qwen3.5-4b-abliterated`, and context `131000`.
+The smaller project-root launcher must stay inside `local-forge` because it uses the existing
+`.venv` and model directories. The installed copy is standalone. In Jan, use base URL
+`http://127.0.0.1:8090/v1`, model `qwen3.5-4b-abliterated`, and context `131000`.
 
 ### Build the desktop EXE or portable installer
 
@@ -108,7 +113,7 @@ Verified on an i5-12450H, 16 GB RAM, Intel UHD Graphics laptop:
 Streaming is supported everywhere: CLI token streaming and SSE streaming through the API, for
 both OpenVINO and llama.cpp models.
 
-## Requirements
+## Requirements (source install)
 
 - Windows 10/11, Python 3.10+
 - Intel CPU or iGPU supported by OpenVINO 2026.4+
@@ -124,8 +129,8 @@ From this folder:
 run.bat setup
 ```
 
-The first run creates `.venv`, installs dependencies, downloads the two remaining text models, and
-installs the photoreal image model (~9.5 GB total). Downloads resume if interrupted; use
+The first run creates `.venv`, installs dependencies, and downloads any missing catalog chat
+models plus the photoreal image model. Expect several GB; downloads resume if interrupted. Use
 `--text-only` or `--image-only` to split them. Then:
 
 ```bat
@@ -155,9 +160,11 @@ lforge models list
 lforge models download gemma4-e2b-uncensored-ov
 lforge models download qwen3.5-4b-abliterated
 lforge models download lfm2.5-2.6b-abliterated
+lforge models inspect "D:\path\model.gguf"
+lforge models download-url "https://huggingface.co/org/repo/resolve/main/model.gguf" --id my-model
 ```
 
-The two GGUF entries are community abliterated builds. If a Hugging Face repository is
+The GGUF entries are community abliterated builds. If a Hugging Face repository is
 unavailable, download the GGUF manually and register it:
 
 ```powershell
@@ -274,10 +281,13 @@ LocalForge fills missing descriptions automatically.
 
 ## Image generation
 
-An SD1.5 image model is configured and working immediately. **`run.bat setup` upgrades it to
-Realistic Vision V6.0 B1**, a photoreal SD1.5 checkpoint exported to OpenVINO FP16. It has no
+For source installations, an SD1.5 image model is configured by **`run.bat setup`**. It installs
+Realistic Vision V6.0 B1, a photoreal SD1.5 checkpoint exported to OpenVINO FP16. It has no
 built-in content filter and is suitable for portrait and boudoir-style photography. Defaults are
 portrait 512×768, 28 steps, guidance 6.5, with a built-in negative prompt.
+
+The portable installer does not include this image checkpoint; it focuses on the chat runtime and
+the bundled sanity model.
 
 ```powershell
 run.bat image "editorial portrait of an adult, soft window light, 85mm lens, natural skin texture"
@@ -326,19 +336,23 @@ faster interactive session, or raise `llama_cache_v` to `q8_0` for maximum cache
 ## How it works
 
 ```text
+desktop.py             Windows desktop control panel
 src/local_forge/
-  api.py              OpenAI-compatible FastAPI server
-  cli.py              lforge commands and interactive chat
-  config.py           JSON config and paths
-  catalog.py          Uncensored model catalog
-  manager.py          Downloads, local imports, status, deletion
-  hardware.py         CPU/RAM/GPU/OpenVINO/llama.cpp detection
-  schemas.py          OpenAI request parsing and image handling
-  tools.py            Gemma tool-call parser and tool-history conversion
+  api.py               OpenAI-compatible FastAPI server
+  cli.py               lforge commands and interactive chat
+  config.py            JSON config and paths
+  catalog.py           Uncensored model catalog
+  manager.py           Downloads, local imports, status, deletion
+  gguf_info.py         GGUF metadata parsing and hybrid-aware recommendations
+  url_download.py      Direct .gguf/.litertlm URL downloads with resume
+  hardware.py          CPU/RAM/GPU/OpenVINO/llama.cpp detection
+  schemas.py           OpenAI request parsing and image handling
+  tools.py             Gemma tool-call parser and tool-history conversion
   engines/
     openvino_engine.py   VLMPipeline, streaming, vision
     llama_cpp_engine.py  llama-server lifecycle and SSE proxy
     image_engine.py      OpenVINO Text2ImagePipeline
+    litert_engine.py     LiteRT Conversation adapter
     manager.py           One-resident-model policy
 ```
 
@@ -380,9 +394,9 @@ remains the production Jan tool engine; the LiteRT adapter is ready for a future
 
 ## Limitations
 
-
-- No GUI; the interface is CLI + API by design.
-- Image generation requires a converted OpenVINO IR checkpoint; none is bundled.
+- The desktop GUI is Windows-only. The CLI and API remain available for automation.
+- The portable installer does not bundle an image checkpoint; use a source setup or
+  `lforge convert-image` to add one.
 - On 16 GB, run one large model at a time. The OpenVINO chat model now defaults to CPU to avoid
   iGPU shared-memory OOM; stop it before loading the image model on GPU.
 - Tool calling works, but small models can produce imperfect tool arguments. Gemma tool calls are

@@ -4,8 +4,9 @@
 dependencies, `llama-server.exe`, and the Qwen3 0.6B sanity model. No terminal or Python installation
 is needed.
 
-**Project path:** double-click `LocalForge.exe` or the LocalForge shortcut on the desktop.
-Use the window to start/stop the server, open Jan, open the API docs, and watch logs and RAM.
+**Project path:** the project-root `LocalForge.exe` is a thin launcher and must stay inside
+`local-forge`; it uses that folder's `.venv` and models. Use it from the project folder for
+development. The installer copy is standalone.
 **Models** lists, downloads, picks, registers, and removes models; downloads show progress and can
 be cancelled. **From URL** downloads a direct `.gguf` or `.litertlm` link from Hugging Face,
 ModelScope, or another provider and registers it locally. **Settings** edits generation defaults
@@ -16,14 +17,15 @@ the model metadata. Settings are saved on **Save** and apply after Stop and Star
 status monitor reconnects the window if a server is running outside its current process state, and
 resets the controls if it stops responding. The model is unloaded when the window closes.
 
-Keep `LocalForge.exe` inside the `local-forge` project folder; it uses the existing `.venv` and
-models. Jan connects to `http://127.0.0.1:8090/v1` with model `qwen3.5-4b-abliterated` and
-context `131000`.
+Jan connects to `http://127.0.0.1:8090/v1` with model `qwen3.5-4b-abliterated` and context
+`131000`. The installer includes a Qwen3 0.6B sanity model for a first-run check; the 4B model is
+downloaded from the Models window.
 
 The commands below remain available for advanced work. Run them from this folder.
 
-**Ready now:** uncensored Gemma 4 E2B chat/vision, Qwen3.5-4B chat/vision, and SD1.5 image
-generation. **Remaining:** LFM and the better photoreal image model install with `run.bat setup`.
+**Ready now:** uncensored Gemma 4 E2B chat/vision, Qwen3.5-4B chat/vision, the Qwen3 0.6B
+sanity model, and SD1.5 image generation from a source setup. **Optional:** LFM and the photoreal
+image model install with `run.bat setup`.
 
 ## One-time setup
 
@@ -31,8 +33,8 @@ generation. **Remaining:** LFM and the better photoreal image model install with
 run.bat setup
 ```
 
-Downloads the two remaining text models and the photoreal image model (~9.5 GB total). It resumes
-if interrupted. If bandwidth is limited, use `run.bat setup --text-only` or
+Downloads any missing catalog chat models and the photoreal image model. Expect several GB; it
+resumes if interrupted. If bandwidth is limited, use `run.bat setup --text-only` or
 `run.bat setup --image-only`.
 
 Check everything:
