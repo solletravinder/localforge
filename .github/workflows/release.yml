@@ -1,0 +1,130 @@
+name: Build portable installer
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing version tag (for example v0.4.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: portable-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout release ref
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref }}
+
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if ($env:EVENT_NAME -eq 'workflow_dispatch') {
+            $tag = $env:INPUT_TAG
+          } else {
+            $tag = $env:REF_NAME
+          }
+          if ($tag -notmatch '^v(\d+\.\d+\.\d+)$') {
+            throw "Release tag must look like v1.2.3, got '$tag'"
+          }
+          $version = $Matches[1]
+          $projectVersion = (Select-String -Path pyproject.toml -Pattern '^version = "([^"]+)"').Matches[0].Groups[1].Value
+          if ($projectVersion -ne $version) {
+            throw "pyproject.toml version $projectVersion does not match tag $tag"
+          }
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "Building $tag (LocalForge $version)"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m venv .venv
+          .venv\Scripts\python.exe -m pip install --upgrade pip
+          .venv\Scripts\pip.exe install -e ".[dev]"
+
+      - name: Download llama.cpp
+        shell: pwsh
+        run: |
+          $zip = Join-Path $env:RUNNER_TEMP "llama-win-vulkan.zip"
+          Invoke-WebRequest -Uri "https://github.com/ggml-org/llama.cpp/releases/download/b11149/llama-b11149-bin-win-vulkan-x64.zip" -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath "build\llama" -Force
+          "LOCALFORGE_LLAMA_DIR=$((Resolve-Path 'build\llama').Path)" >> $env:GITHUB_ENV
+
+      - name: Run tests
+        shell: pwsh
+        run: .venv\Scripts\python.exe -m pytest -q
+
+      - name: Build desktop EXE
+        shell: pwsh
+        run: |
+          .venv\Scripts\pyinstaller.exe --noconfirm --clean --onefile --windowed --noupx `
+            --name LocalForge `
+            --icon assets\localforge.ico `
+            --add-data "assets;assets" `
+            desktop.py
+          Copy-Item dist\LocalForge.exe LocalForge.exe -Force
+
+      - name: Build portable app
+        shell: pwsh
+        run: .venv\Scripts\python.exe build-portable.py
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --yes --no-progress
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DMyAppVersion=${{ steps.version.outputs.version }}" installer.iss
+          $setup = "dist\LocalForge-Setup-${{ steps.version.outputs.version }}.exe"
+          if (!(Test-Path $setup)) {
+            throw "Installer not produced: $setup"
+          }
+          Get-FileHash $setup -Algorithm SHA256 | Format-List
+          "SETUP_PATH=$setup" >> $env:GITHUB_ENV
+
+      - name: Publish release with only the setup EXE
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ steps.version.outputs.tag }}"
+          $setup = $env:SETUP_PATH
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag $setup --clobber
+            if ($LASTEXITCODE -ne 0) { throw "Asset upload failed" }
+            gh release edit $tag --latest
+            if ($LASTEXITCODE -ne 0) { throw "Could not mark release latest" }
+            Write-Host "Updated existing release $tag with $setup"
+          } else {
+            gh release create $tag $setup --title "LocalForge $tag" --generate-notes --latest
+            if ($LASTEXITCODE -ne 0) { throw "Release creation failed" }
+            Write-Host "Created release $tag with $setup"
+          }

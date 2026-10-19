@@ -18,7 +18,10 @@ if not exist "%ISCC%" (
   exit /b 1
 )
 
-"%ISCC%" installer.iss
+for /f "usebackq delims=" %%v in (`".venv\Scripts\python.exe" -c "import pathlib,tomllib; print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])"`) do set "VERSION=%%v"
+if not defined VERSION set "VERSION=0.4.0"
+
+"%ISCC%" /DMyAppVersion=%VERSION% installer.iss
 if errorlevel 1 goto :failed
 
 echo.

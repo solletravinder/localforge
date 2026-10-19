@@ -18,7 +18,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 APP_TITLE = "LocalForge"
-APP_VERSION = "0.4.0"
+APP_VERSION = "0.4.1"
 BG = "#0b0f14"
 PANEL = "#141a23"
 PANEL_2 = "#10151d"

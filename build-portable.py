@@ -33,11 +33,19 @@ def read_base_python() -> Path:
 
 
 def find_llama_package() -> Path:
+    configured = os.environ.get("LOCALFORGE_LLAMA_DIR")
+    if configured:
+        matches = sorted(Path(configured).expanduser().rglob("llama-server.exe"))
+        if matches:
+            return matches[0].parent
+        raise RuntimeError(f"llama-server.exe was not found under {configured}")
     local = Path(os.environ.get("LOCALAPPDATA", ""))
     packages = local / "Microsoft" / "WinGet" / "Packages"
     matches = sorted(packages.glob("ggml.llamacpp*/llama-server.exe"))
     if not matches:
-        raise RuntimeError("llama-server.exe was not found in the WinGet package directory")
+        raise RuntimeError(
+            "llama-server.exe was not found. Set LOCALFORGE_LLAMA_DIR or install the WinGet package."
+        )
     return matches[0].parent
 
 

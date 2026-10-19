@@ -1,6 +1,6 @@
 # LocalForge — desktop app and commands
 
-**Installed path:** run `LocalForge-Setup-0.4.0.exe` from the latest release. It bundles Python,
+**Installed path:** run `LocalForge-Setup-*.exe` from the latest release. It bundles Python,
 dependencies, `llama-server.exe`, and the Qwen3 0.6B sanity model. No terminal or Python installation
 is needed.
 

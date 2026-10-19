@@ -8,7 +8,7 @@ uncensored/abliterated multimodal models. It uses **OpenVINO GenAI** for Gemma 4
 
 ## Portable installer
 
-Download **`LocalForge-Setup-0.4.0.exe`** from the latest release and run it. It installs per user,
+Download the latest **`LocalForge-Setup-*.exe`** from the releases page and run it. It installs per user,
 needs no Python installation or terminal, and bundles the Python runtime, dependencies, and
 `llama-server.exe`.
 
@@ -66,8 +66,23 @@ build-installer.bat
 ```
 
 This bundles Python, the dependencies, `llama-server.exe`, and the Qwen3 0.6B sanity model, then
-writes `dist\LocalForge-Setup-0.4.0.exe`. Model weights for the larger models are downloaded from
+writes `dist\LocalForge-Setup-<version>.exe`. Model weights for the larger models are downloaded from
 the Models window.
+
+### Automated releases
+
+`.github/workflows/release.yml` builds and publishes the portable installer on Windows when a
+version tag is pushed. It uploads only the setup EXE to the release. To make a release, bump the
+version in `pyproject.toml`, commit, then push a matching tag:
+
+```bat
+git tag v0.4.1
+git push origin main --follow-tags
+```
+
+The workflow verifies the tag matches the project version, builds the bundled sanity model and
+installer, and creates or updates the release. It can also be run manually from the Actions tab
+against an existing tag.
 
 Verified on an i5-12450H, 16 GB RAM, Intel UHD Graphics laptop:
 

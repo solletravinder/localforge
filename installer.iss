@@ -1,5 +1,7 @@
 #define MyAppName "LocalForge"
-#define MyAppVersion "0.4.0"
+#ifndef MyAppVersion
+  #define MyAppVersion "0.4.1"
+#endif
 #define MyAppPublisher "Ravinder Sollet"
 #define MyAppURL "https://github.com/solletravinder/localforge"
 #define MyAppExeName "LocalForge.exe"

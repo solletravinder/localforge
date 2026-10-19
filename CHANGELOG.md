@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.1 — 2026-10-19
+
+- Added a tag-triggered GitHub Actions release workflow that builds the Windows portable
+  installer and publishes only the setup EXE.
+- Made the portable builder accept a CI-supplied llama.cpp directory and the installer version
+  injectable with `/DMyAppVersion=...`.
+- Added an automatic tests step before packaging in CI.
+
 ## 0.4.0 — 2026-10-19
 
 - Added a per-user Windows portable installer that bundles the Python runtime, dependencies,
