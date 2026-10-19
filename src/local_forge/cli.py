@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -277,6 +278,56 @@ def cmd_models_add_local(args, config: AppConfig) -> int:
         modalities=modalities,
     )
     print(f"Registered {spec.id} at {spec.local_path}")
+    return 0
+
+
+def cmd_models_inspect(args, config: AppConfig) -> int:
+    from .gguf_info import inspect_gguf
+
+    try:
+        info = inspect_gguf(args.path)
+    except Exception as exc:
+        print(f"Inspect failed: {exc}", file=sys.stderr)
+        return 1
+    print(json.dumps(info, indent=2))
+    return 0
+
+
+def cmd_models_download_url(args, config: AppConfig) -> int:
+    from .url_download import download_url, engine_for_file, filename_from_url
+
+    model_id = args.id.strip()
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", model_id):
+        print(
+            "Model ID may contain letters, numbers, dots, underscores, and hyphens.",
+            file=sys.stderr,
+        )
+        return 1
+    manager = ModelManager(config)
+    if any(spec.id == model_id for spec in manager.specs()):
+        print(f"A model with id '{model_id}' already exists.", file=sys.stderr)
+        return 1
+    modalities = [item.strip() for item in args.modalities.split(",") if item.strip()]
+    if not modalities:
+        modalities = ["text"]
+    try:
+        resolved_filename = filename_from_url(args.url, args.filename)
+        engine = args.engine
+        if engine == "auto":
+            engine = engine_for_file(resolved_filename)
+        target_dir = config.models_path / model_id
+        path = download_url(args.url, target_dir, args.filename)
+        spec = manager.add_local(
+            model_id,
+            str(path),
+            engine,
+            name=args.name or model_id,
+            modalities=modalities,
+        )
+    except Exception as exc:
+        print(f"URL download failed: {exc}", file=sys.stderr)
+        return 1
+    print(json.dumps(manager.status(spec), indent=2))
     return 0
 
 
@@ -573,6 +624,17 @@ def build_parser() -> argparse.ArgumentParser:
     models_status = models_sub.add_parser("status", help="Show one model's status")
     models_status.add_argument("model_id")
     models_status.set_defaults(func=cmd_models_status)
+    models_inspect = models_sub.add_parser("inspect", help="Inspect GGUF metadata and recommend llama.cpp settings")
+    models_inspect.add_argument("path")
+    models_inspect.set_defaults(func=cmd_models_inspect)
+    models_url = models_sub.add_parser("download-url", help="Download a GGUF or LiteRT model from a direct URL")
+    models_url.add_argument("url")
+    models_url.add_argument("--id", required=True)
+    models_url.add_argument("--name")
+    models_url.add_argument("--engine", choices=["auto", "llama.cpp", "litert"], default="auto")
+    models_url.add_argument("--modalities", default="text", help="Comma-separated: text,image")
+    models_url.add_argument("--filename", help="Optional filename if the URL has no clean name")
+    models_url.set_defaults(func=cmd_models_download_url)
 
     config = sub.add_parser("config", help="Show or edit configuration")
     config_sub = config.add_subparsers(dest="config_command", required=True)

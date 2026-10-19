@@ -7,12 +7,14 @@ is needed.
 **Project path:** double-click `LocalForge.exe` or the LocalForge shortcut on the desktop.
 Use the window to start/stop the server, open Jan, open the API docs, and watch logs and RAM.
 **Models** lists, downloads, picks, registers, and removes models; downloads show progress and can
-be cancelled. **Settings** edits generation defaults (max tokens, temperature, top-p, thinking),
-llama.cpp runtime arguments (context, GPU layers, batch/ubatch, threads, parallel slots, flash
-attention, warmup), and K/V cache types. Settings are saved on **Save** and apply after Stop and
-Start. A background status monitor reconnects the window if a server is running outside its
-current process state, and resets the controls if it stops responding. The model is unloaded when
-the window closes.
+be cancelled. **From URL** downloads a direct `.gguf` or `.litertlm` link from Hugging Face,
+ModelScope, or another provider and registers it locally. **Settings** edits generation defaults
+(max tokens, temperature, top-p, thinking), llama.cpp runtime arguments (context, GPU layers,
+batch/ubatch, threads, parallel slots, flash attention, warmup), and K/V cache types. **Auto-tune
+from selected GGUF** detects hybrid versus full-attention architecture and fills those fields from
+the model metadata. Settings are saved on **Save** and apply after Stop and Start. A background
+status monitor reconnects the window if a server is running outside its current process state, and
+resets the controls if it stops responding. The model is unloaded when the window closes.
 
 Keep `LocalForge.exe` inside the `local-forge` project folder; it uses the existing `.venv` and
 models. Jan connects to `http://127.0.0.1:8090/v1` with model `qwen3.5-4b-abliterated` and
@@ -179,6 +181,8 @@ run.bat setup --text-only
 run.bat setup --image-only
 run.bat models download qwen3.5-4b-abliterated
 run.bat models download lfm2.5-2.6b-abliterated
+run.bat models inspect "D:\path\model.gguf"
+run.bat models download-url "https://huggingface.co/org/repo/resolve/main/model.gguf" --id my-model
 run.bat models remove <id>
 ```
 

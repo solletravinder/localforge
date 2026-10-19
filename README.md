@@ -31,6 +31,11 @@ A background status monitor reconciles the window with the actual server every f
 server is running but the UI lost track of it, the window reconnects, switches to the active model,
 and enables Jan/API access. If the server dies, the controls reset after three failed checks.
 
+For GGUF models, **Settings → Auto-tune from selected GGUF** reads the model metadata and detects
+hybrid (DeltaNet/SSM + attention) versus full-attention architectures. It recommends a context
+size that fits the KV budget, along with batch/ubatch, flash attention, and K/V cache types. The
+suggestions fill the llama.cpp fields for review; per-model context overrides still take priority.
+
 **Settings** has three tabs:
 
 - **Generation:** max output tokens, temperature, top-p, and thinking mode.
@@ -48,6 +53,8 @@ Settings are validated, saved to the LocalForge config, and take effect after St
 - Downloads catalog models with live progress and a cancel control.
 - Picks the model used by the main Start button.
 - Adds an existing GGUF, OpenVINO, or LiteRT file/folder in place.
+- Downloads a direct `.gguf` or `.litertlm` URL from Hugging Face, ModelScope, or another
+  provider, with resume support. Hugging Face `/blob/` links are converted to `/resolve/`.
 - Removes downloaded models or unregisters local models without deleting their files.
 
 Keep `LocalForge.exe` inside the `local-forge` folder: it uses the existing `.venv` and model
@@ -85,8 +92,9 @@ git push origin main --follow-tags
 ```
 
 The workflow verifies the tag matches the project version, builds the bundled sanity model and
-installer, and creates or updates the release. It can also be run manually from the Actions tab
-against an existing tag.
+installer, and creates or updates the release. Release notes are generated from the matching
+`CHANGELOG.md` section and include installer size and SHA-256. It can also be run manually from
+the Actions tab against an existing tag.
 
 Verified on an i5-12450H, 16 GB RAM, Intel UHD Graphics laptop:
 

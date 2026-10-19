@@ -155,8 +155,8 @@ class ModelManager:
             elif not any(resolved.glob("*.gguf")):
                 raise ValueError("No .gguf files found in the selected directory")
             fmt = "gguf"
-        if any(item.get("id") == model_id for item in self.config.local_models):
-            raise ValueError(f"A local model with id '{model_id}' already exists")
+        if any(item.id == model_id for item in all_specs(self.config)):
+            raise ValueError(f"A model with id '{model_id}' already exists")
 
         entry = {
             "id": model_id,

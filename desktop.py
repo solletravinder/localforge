@@ -11,6 +11,7 @@ import sys
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import webbrowser
 from pathlib import Path
@@ -18,7 +19,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 APP_TITLE = "LocalForge"
-APP_VERSION = "0.4.2"
+APP_VERSION = "0.5.0"
 BG = "#0b0f14"
 PANEL = "#141a23"
 PANEL_2 = "#10151d"
@@ -1441,6 +1442,25 @@ class SettingsDialog(tk.Toplevel):
             self.warmup_var,
             "Absorbs Qwen's slow first request penalty.",
         )
+        tune = tk.Frame(runtime, bg=PANEL)
+        tune.grid(row=16, column=0, columnspan=2, sticky="w", pady=(14, 0))
+        self.app._button(
+            tune,
+            "Auto-tune from selected GGUF",
+            self.auto_tune,
+            secondary=True,
+            width=26,
+        ).pack(side="left")
+        self.autotune_label = tk.Label(
+            runtime,
+            text="Detects hybrid vs full-attention and fills the llama.cpp fields.",
+            bg=PANEL,
+            fg=DIM,
+            font=(UI, 8),
+            wraplength=560,
+            justify="left",
+        )
+        self.autotune_label.grid(row=17, column=0, columnspan=2, sticky="w", pady=(5, 0))
 
         self.k_var = tk.StringVar(value=str(self.app.cfg.get("llama_cache_k", "q8_0")))
         self.v_var = tk.StringVar(value=str(self.app.cfg.get("llama_cache_v", "q4_0")))
@@ -1585,6 +1605,91 @@ class SettingsDialog(tk.Toplevel):
             wraplength=560,
             justify="left",
         ).grid(row=row + 1, column=1, sticky="w", padx=(18, 0))
+
+    def auto_tune(self) -> None:
+        record = self.app.model_by_id.get(self.app.selected_model(), {})
+        if not record:
+            messagebox.showerror(APP_TITLE, "Select a model first.", parent=self)
+            return
+        if record.get("engine") != "llama.cpp":
+            messagebox.showinfo(
+                APP_TITLE,
+                "Auto-tune applies to llama.cpp GGUF models. "
+                "OpenVINO and LiteRT use their own engine settings.",
+                parent=self,
+            )
+            return
+        model_path = record.get("model_file") or record.get("path")
+        if not model_path or not Path(str(model_path)).is_file():
+            messagebox.showerror(
+                APP_TITLE,
+                "The selected GGUF is not installed locally. Download it first.",
+                parent=self,
+            )
+            return
+        command = [
+            str(runtime_python(self.app.app_dir)),
+            "-u",
+            "-m",
+            "local_forge",
+            "models",
+            "inspect",
+            str(model_path),
+        ]
+        try:
+            result = subprocess.run(
+                command,
+                cwd=str(self.app.app_dir),
+                env=os.environ.copy(),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=30,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            messagebox.showerror(APP_TITLE, f"Could not inspect the model:{chr(10)}{exc}", parent=self)
+            return
+        output = (result.stdout or "").strip()
+        start = output.find("{")
+        if result.returncode != 0 or start < 0:
+            detail = (result.stderr or output or "no metadata output").strip()
+            messagebox.showerror(
+                APP_TITLE,
+                "Could not inspect the model." + chr(10) * 2 + detail[-1500:],
+                parent=self,
+            )
+            return
+        try:
+            info = json.loads(output[start:])
+            recommendation = info["recommended"]
+        except (ValueError, KeyError, TypeError) as exc:
+            messagebox.showerror(APP_TITLE, f"Unexpected inspect output:{chr(10)}{exc}", parent=self)
+            return
+        self.context_var.set(str(recommendation["context_length"]))
+        self.batch_var.set(str(recommendation["batch"]))
+        self.ubatch_var.set(str(recommendation["ubatch"]))
+        self.flash_var.set(str(recommendation["flash_attn"]))
+        self.k_var.set(str(recommendation["cache_k"]))
+        self.v_var.set(str(recommendation["cache_v"]))
+        model_type = str(info.get("model_type") or "unknown")
+        arch = str(info.get("architecture") or "unknown")
+        attn = info.get("attention_layers")
+        blocks = info.get("block_count")
+        kv_gb = info.get("recommended_kv_q8q4_gb")
+        self.autotune_label.configure(
+            text=(
+                f"Detected {model_type} {arch}: {blocks} layers, {attn} attention layers. "
+                f"Suggested {int(recommendation['context_length']):,} context, "
+                f"~{kv_gb} GB KV at Q8/Q4. Review and Save."
+            ),
+            fg=GREEN,
+        )
+        self.app.append_log(
+            f"Auto-tune suggestion for {self.app.selected_model()}: "
+            f"{model_type}, ctx {int(recommendation['context_length']):,}"
+        )
 
     @staticmethod
     def _entry(parent: tk.Misc, variable: tk.StringVar) -> tk.Entry:
@@ -1913,6 +2018,10 @@ class ModelsWindow(tk.Toplevel):
             actions, "Add Local", self.open_add_local, ghost=True, width=10
         )
         self.btn_add.pack(side="left", padx=(7, 0))
+        self.btn_url = self.app._button(
+            actions, "From URL", self.open_url_download, ghost=True, width=9
+        )
+        self.btn_url.pack(side="left", padx=(7, 0))
         self.btn_remove = self.app._button(
             actions, "Remove", self.remove_selected, ghost=True, width=9, disabled=True
         )
@@ -2144,6 +2253,7 @@ class ModelsWindow(tk.Toplevel):
         )
         for button, enabled in (
             (self.btn_add, not busy),
+            (self.btn_url, not busy),
             (self.btn_remove, can_remove),
             (self.btn_refresh, not busy),
             (self.btn_folder, not busy),
@@ -2240,6 +2350,51 @@ class ModelsWindow(tk.Toplevel):
 
     def open_add_local(self) -> None:
         AddLocalDialog(self)
+
+    def open_url_download(self) -> None:
+        UrlDownloadDialog(self)
+
+    def start_url_download(
+        self,
+        url: str,
+        model_id: str,
+        name: str,
+        engine: str,
+        modalities: str,
+    ) -> None:
+        command = [
+            str(runtime_python(self.app.app_dir)),
+            "-u",
+            "-m",
+            "local_forge",
+            "models",
+            "download-url",
+            url,
+            "--id",
+            model_id,
+            "--name",
+            name,
+            "--engine",
+            engine,
+            "--modalities",
+            modalities,
+        ]
+        record = {
+            "id": model_id,
+            "name": name,
+            "engine": engine,
+            "modalities": modalities.split(","),
+            "installed": False,
+            "local": True,
+            "path": str(Path(str(self.app.cfg.get("models_dir") or "")) / model_id),
+            "size_gb": 0,
+            "expected_size_gb": 0,
+            "notes": "",
+            "license": "local",
+            "repo": "",
+        }
+        self._op_focus_id = model_id
+        self._start_operation("url", record, command)
 
     def start_add_local(
         self,
@@ -2416,8 +2571,10 @@ class ModelsWindow(tk.Toplevel):
         elif code == 0:
             self._set_status(f"{kind.title()} complete.", GREEN)
             self._append_log(f"{kind.title()} complete.")
-            if kind in {"download", "remove", "add"}:
-                self._op_focus_id = str(record.get("id")) if kind == "add" else self._op_focus_id
+            if kind in {"download", "remove", "add", "url"}:
+                self._op_focus_id = (
+                    str(record.get("id")) if kind in {"add", "url"} else self._op_focus_id
+                )
                 self.refresh_models()
         else:
             self._set_status(f"{kind.title()} failed (code {code}). See the log.", RED)
@@ -2483,6 +2640,227 @@ class ModelsWindow(tk.Toplevel):
         if self.app.models_window is self:
             self.app.models_window = None
         super().destroy()
+
+
+class UrlDownloadDialog(tk.Toplevel):
+    def __init__(self, manager: ModelsWindow):
+        super().__init__(manager)
+        self.manager = manager
+        self.app = manager.app
+        self.title("LocalForge · download from URL")
+        self.configure(bg=PANEL)
+        self.resizable(False, False)
+        self.transient(manager)
+        self.grab_set()
+        self.bind("<Escape>", lambda _event: self.destroy())
+        self._build()
+
+    def _build(self) -> None:
+        outer = tk.Frame(self, bg=PANEL, padx=22, pady=18)
+        outer.pack(fill="both", expand=True)
+        outer.grid_columnconfigure(1, weight=1)
+
+        tk.Label(
+            outer,
+            text="Download a model from a URL",
+            bg=PANEL,
+            fg=TEXT,
+            font=(UI, 15, "bold"),
+            anchor="w",
+        ).grid(row=0, column=0, columnspan=3, sticky="w")
+        tk.Label(
+            outer,
+            text="Paste a direct .gguf or .litertlm file link from Hugging Face, ModelScope, "
+            "or any other provider. HF /blob/ links are converted automatically.",
+            bg=PANEL,
+            fg=MUTED,
+            font=(UI, 9),
+            anchor="w",
+            wraplength=590,
+            justify="left",
+        ).grid(row=1, column=0, columnspan=3, sticky="w", pady=(4, 14))
+
+        self.url_var = tk.StringVar()
+        self.id_var = tk.StringVar()
+        self.name_var = tk.StringVar()
+        self.engine_var = tk.StringVar(value="auto")
+        self.text_var = tk.BooleanVar(value=True)
+        self.image_var = tk.BooleanVar(value=False)
+
+        self._field(outer, 2, "File URL", self.url_var)
+        tk.Button(
+            outer,
+            text="Paste",
+            command=self.paste,
+            bg=PANEL_2,
+            fg=MUTED,
+            activebackground=BORDER,
+            activeforeground=TEXT,
+            relief="flat",
+            bd=0,
+            padx=9,
+            pady=5,
+            font=(UI, 9),
+            cursor="hand2",
+        ).grid(row=2, column=2, padx=(8, 0))
+        self._field(outer, 3, "Model ID", self.id_var)
+        self._field(outer, 4, "Display name", self.name_var)
+        self._field(outer, 5, "Engine", self.engine_var, combo=["auto", "llama.cpp", "litert"])
+
+        tk.Label(outer, text="Modalities", bg=PANEL, fg=MUTED, font=(UI, 9)).grid(
+            row=6, column=0, sticky="w", pady=(10, 0)
+        )
+        checks = tk.Frame(outer, bg=PANEL)
+        checks.grid(row=6, column=1, columnspan=2, sticky="w", pady=(10, 0))
+        for text, var, state in (
+            ("Text", self.text_var, "disabled"),
+            ("Image", self.image_var, "normal"),
+        ):
+            tk.Checkbutton(
+                checks,
+                text=text,
+                variable=var,
+                state=state,
+                disabledforeground=MUTED,
+                bg=PANEL,
+                fg=TEXT,
+                selectcolor=AMBER,
+                activebackground=PANEL,
+                activeforeground=TEXT,
+                highlightthickness=0,
+                bd=0,
+                font=(UI, 9),
+            ).pack(side="left", padx=(0, 14))
+
+        tk.Label(
+            outer,
+            text="The file is saved under models/<id>/ and registered as a local model. "
+            "A single-file GGUF does not include a separate mmproj vision file.",
+            bg=PANEL,
+            fg=DIM,
+            font=(UI, 8),
+            wraplength=590,
+            justify="left",
+        ).grid(row=7, column=0, columnspan=3, sticky="w", pady=(14, 0))
+
+        footer = tk.Frame(outer, bg=PANEL)
+        footer.grid(row=8, column=0, columnspan=3, sticky="e", pady=(16, 0))
+        self.app._button(footer, "Cancel", self.destroy, ghost=True, width=9).pack(side="left")
+        self.app._button(footer, "Download", self.download, primary=True, width=10).pack(
+            side="left", padx=(8, 0)
+        )
+
+        self.url_var.trace_add("write", lambda *_: self._url_changed())
+        self.update_idletasks()
+        width = 660
+        height = outer.winfo_reqheight() + 24
+        x = (self.winfo_screenwidth() - width) // 2
+        y = (self.winfo_screenheight() - height) // 2
+        self.geometry(f"{width}x{height}+{x}+{y}")
+
+    def _field(
+        self,
+        parent: tk.Misc,
+        row: int,
+        label: str,
+        variable: tk.StringVar,
+        combo: list[str] | None = None,
+    ) -> None:
+        tk.Label(parent, text=label, bg=PANEL, fg=MUTED, font=(UI, 9)).grid(
+            row=row, column=0, sticky="w", pady=5
+        )
+        if combo:
+            widget: tk.Widget = ttk.Combobox(
+                parent,
+                textvariable=variable,
+                values=combo,
+                state="readonly",
+                style="Forge.TCombobox",
+                font=(MONO, 9),
+                width=16,
+            )
+        else:
+            widget = tk.Entry(
+                parent,
+                textvariable=variable,
+                bg=PANEL_2,
+                fg=TEXT,
+                insertbackground=TEXT,
+                relief="flat",
+                highlightthickness=1,
+                highlightbackground=BORDER,
+                highlightcolor=AMBER,
+                font=(MONO, 9),
+                width=52,
+            )
+        widget.grid(row=row, column=1, sticky="ew", padx=(14, 0), pady=5)
+
+    def paste(self) -> None:
+        try:
+            text = self.clipboard_get()
+        except tk.TclError:
+            return
+        if text:
+            self.url_var.set(text.strip())
+
+    def _url_changed(self) -> None:
+        url = self.url_var.get().strip()
+        if not url:
+            return
+        try:
+            parsed = urllib.parse.urlsplit(url)
+        except ValueError:
+            return
+        name = Path(urllib.parse.unquote(parsed.path)).name
+        if not name:
+            return
+        suffix = Path(name).suffix.lower()
+        if suffix not in {".gguf", ".litertlm"}:
+            return
+        stem = Path(name).stem
+        if not self.id_var.get().strip():
+            clean = re.sub(r"[^a-zA-Z0-9._-]+", "-", stem).strip("-").lower()
+            self.id_var.set(clean)
+        if not self.name_var.get().strip():
+            self.name_var.set(stem)
+
+    def download(self) -> None:
+        url = self.url_var.get().strip()
+        model_id = self.id_var.get().strip()
+        name = self.name_var.get().strip() or model_id
+        engine = self.engine_var.get()
+        if not url:
+            messagebox.showerror(APP_TITLE, "Paste a model file URL.", parent=self)
+            return
+        try:
+            parsed = urllib.parse.urlsplit(url)
+        except ValueError:
+            parsed = None
+        if parsed is None or parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            messagebox.showerror(APP_TITLE, "Enter a valid http(s) URL.", parent=self)
+            return
+        filename = Path(urllib.parse.unquote(parsed.path)).name
+        if Path(filename).suffix.lower() not in {".gguf", ".litertlm"}:
+            messagebox.showerror(
+                APP_TITLE,
+                "Use a direct file link ending in .gguf or .litertlm. "
+                "For Hugging Face, open the file page and use its download link.",
+                parent=self,
+            )
+            return
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", model_id):
+            messagebox.showerror(
+                APP_TITLE,
+                "Model ID may contain letters, numbers, dots, underscores, and hyphens.",
+                parent=self,
+            )
+            return
+        if not self.text_var.get() and not self.image_var.get():
+            messagebox.showerror(APP_TITLE, "Select at least one modality.", parent=self)
+            return
+        modalities = "text,image" if self.image_var.get() else "text"
+        self.manager.start_url_download(url, model_id, name, engine, modalities)
+        self.destroy()
 
 
 class AddLocalDialog(tk.Toplevel):
