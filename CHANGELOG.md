@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0 — 2026-10-19
+
+- Added a desktop Models manager with installed/missing status, download progress, cancellation,
+  model picking, local model registration, and removal/unregistration.
+- The main model picker now reflects the real catalog and local registrations instead of a fixed
+  two-model list.
+- Added `lforge models list --json` for reliable desktop integration.
+- Model switching and file removal are blocked while the server is running; downloads and local
+  registration remain available.
+- Progress tracking and automatic catalog refresh after download, registration, or removal.
+
 ## 0.2.0 — 2026-10-19
 
 - Expanded the desktop Settings dialog into three tabs: Generation, llama.cpp, and KV cache.

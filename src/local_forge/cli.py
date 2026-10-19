@@ -214,6 +214,9 @@ def cmd_doctor(args, config: AppConfig) -> int:
 
 def cmd_models_list(args, config: AppConfig) -> int:
     manager = ModelManager(config)
+    if getattr(args, "json", False):
+        print(json.dumps([manager.status(spec) for spec in manager.specs()], indent=2))
+        return 0
     rows = []
     for spec in manager.specs():
         status = manager.status(spec)
@@ -550,6 +553,7 @@ def build_parser() -> argparse.ArgumentParser:
     models = sub.add_parser("models", help="Manage models")
     models_sub = models.add_subparsers(dest="models_command", required=True)
     models_list = models_sub.add_parser("list", help="List catalog models")
+    models_list.add_argument("--json", action="store_true", help="Print machine-readable model status")
     models_list.set_defaults(func=cmd_models_list)
     models_download = models_sub.add_parser("download", help="Download a model")
     models_download.add_argument("model_id")

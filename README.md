@@ -25,6 +25,16 @@ model and stops the server, so it stays on demand.
 
 Settings are validated, saved to the LocalForge config, and take effect after Stop and Start.
 
+**Models** opens the model manager:
+
+![LocalForge model manager](assets/models.png)
+
+- Lists installed, missing, and locally registered chat models.
+- Downloads catalog models with live progress and a cancel control.
+- Picks the model used by the main Start button.
+- Adds an existing GGUF, OpenVINO, or LiteRT file/folder in place.
+- Removes downloaded models or unregisters local models without deleting their files.
+
 Keep `LocalForge.exe` inside the `local-forge` folder: it uses the existing `.venv` and model
 directories. In Jan, use base URL `http://127.0.0.1:8090/v1`, model
 `qwen3.5-4b-abliterated`, and context `131000`.

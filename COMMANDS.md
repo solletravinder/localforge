@@ -2,10 +2,11 @@
 
 **No-terminal path:** double-click `LocalForge.exe` or the LocalForge shortcut on the desktop.
 Use the window to start/stop the server, open Jan, open the API docs, and watch logs and RAM.
-**Settings** edits generation defaults (max tokens, temperature, top-p, thinking), llama.cpp
-runtime arguments (context, GPU layers, batch/ubatch, threads, parallel slots, flash attention,
-warmup), and K/V cache types. Settings are saved on **Save** and apply after Stop and Start. The
-model is unloaded when the window closes.
+**Models** lists, downloads, picks, registers, and removes models; downloads show progress and can
+be cancelled. **Settings** edits generation defaults (max tokens, temperature, top-p, thinking),
+llama.cpp runtime arguments (context, GPU layers, batch/ubatch, threads, parallel slots, flash
+attention, warmup), and K/V cache types. Settings are saved on **Save** and apply after Stop and
+Start. The model is unloaded when the window closes.
 
 Keep `LocalForge.exe` inside the `local-forge` project folder; it uses the existing `.venv` and
 models. Jan connects to `http://127.0.0.1:8090/v1` with model `qwen3.5-4b-abliterated` and
