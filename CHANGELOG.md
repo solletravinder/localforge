@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.2 — 2026-10-19
+
+- Added a background health monitor that reconciles the desktop UI with the actual local server.
+- If the server is running but the UI lost its process state, the window reconnects, selects the
+  active model, and enables Jan/API access.
+- If the server stops responding, the Start controls reset after three failed checks.
+- Active model information is synchronized from the server health response.
+
 ## 0.4.1 — 2026-10-19
 
 - Added a tag-triggered GitHub Actions release workflow that builds the Windows portable

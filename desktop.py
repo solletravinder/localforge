@@ -18,7 +18,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 APP_TITLE = "LocalForge"
-APP_VERSION = "0.4.1"
+APP_VERSION = "0.4.2"
 BG = "#0b0f14"
 PANEL = "#141a23"
 PANEL_2 = "#10151d"
@@ -456,6 +456,8 @@ class LocalForgeApp:
         self.models_loading = False
         self._models_queue: queue.Queue[tuple[str, object]] = queue.Queue()
         self.models_window: ModelsWindow | None = None
+        self._health_queue: queue.Queue[dict | None] = queue.Queue()
+        self._health_failures = 0
 
         self._configure_window()
         self._build_ui()
@@ -482,6 +484,7 @@ class LocalForgeApp:
                 self._set_state("external", f"Existing LocalForge server on 127.0.0.1:{self.port}")
                 self.append_log("Attached to an existing LocalForge server on the configured port.")
             self._start_models_refresh()
+            threading.Thread(target=self._health_monitor_worker, daemon=True).start()
 
     def _configure_window(self) -> None:
         self.root.title(f"{APP_TITLE} · local AI control")
@@ -970,6 +973,59 @@ class LocalForgeApp:
             self.metric_vars["ram"].set(f"{ram:.1f} GB" if ram is not None else "—")
         self.root.after(2000, self._refresh_ram)
 
+    def _health_monitor_worker(self) -> None:
+        while True:
+            health = server_health(self.port)
+            self._health_queue.put(health)
+            time.sleep(4.0)
+
+    def _reconcile_health(self, health: dict | None) -> None:
+        if self._closing:
+            return
+        active = bool(health and health.get("app") == "localforge")
+        if active:
+            self._health_failures = 0
+            active_chat = (health.get("engines") or {}).get("active_chat") or {}
+            actual_model = str(active_chat.get("id") or "")
+            if (
+                actual_model
+                and actual_model in self.model_by_id
+                and actual_model != self.selected_model()
+            ):
+                self.set_selected_model(actual_model)
+                self.append_log(f"Status monitor: active model is {actual_model}.")
+            if self.state in {"stopped", "error", "starting"}:
+                managed = self.controller is not None and self.controller.is_active()
+                self.external = not managed
+                if managed:
+                    self._set_state(
+                        "running",
+                        "Status monitor: reconnected to the running managed server.",
+                    )
+                else:
+                    self._set_state(
+                        "external",
+                        "Status monitor: an active LocalForge server was found outside this window.",
+                    )
+                self.append_log(
+                    "Status monitor: reconnected to an active LocalForge server."
+                )
+            return
+
+        if self.state in {"running", "external"}:
+            self._health_failures += 1
+            if self._health_failures >= 3:
+                self.external = False
+                self._set_state(
+                    "error",
+                    "The server stopped responding. If it was shutting down, Start is ready again.",
+                )
+                self.append_log(
+                    "Status monitor: server stopped responding; Start controls reset."
+                )
+        elif self.state not in {"starting", "stopping"}:
+            self._health_failures = 0
+
     def _start_models_refresh(self) -> None:
         if self.app_dir is None or self.models_loading:
             return
@@ -1039,6 +1095,12 @@ class LocalForgeApp:
             else:
                 self.models_loading = False
                 self.append_log(f"Model refresh failed: {value}")
+        while True:
+            try:
+                health = self._health_queue.get_nowait()
+            except queue.Empty:
+                break
+            self._reconcile_health(health)
         if self.controller is not None:
             for _ in range(60):
                 try:

@@ -27,6 +27,10 @@ The window can start and stop the local server, choose the model, show live RAM 
 settings, open Jan, open the API docs, and open the log folder. Closing the window unloads the
 model and stops the server, so it stays on demand.
 
+A background status monitor reconciles the window with the actual server every few seconds. If a
+server is running but the UI lost track of it, the window reconnects, switches to the active model,
+and enables Jan/API access. If the server dies, the controls reset after three failed checks.
+
 **Settings** has three tabs:
 
 - **Generation:** max output tokens, temperature, top-p, and thinking mode.
@@ -76,7 +80,7 @@ version tag is pushed. It uploads only the setup EXE to the release. To make a r
 version in `pyproject.toml`, commit, then push a matching tag:
 
 ```bat
-git tag v0.4.1
+git tag vX.Y.Z
 git push origin main --follow-tags
 ```
 
